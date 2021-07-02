@@ -1,0 +1,100 @@
+﻿@inject IHttpClientFactory ClientFactory
+
+<form>
+    <div class="modal-header">
+        <h5 class="modal-title">@Pizza.Special.Name</h5>
+        <h6 class="pl-2">@Pizza.Special.Description</h6>
+    </div>
+    <div class="modal-body">
+        <div>
+            <label>Size:</label>
+            <input type="range" min="@Pizza.MinimumSize" max="@Pizza.MaximumSize" step="1" @bind="Pizza.Size" @bind:event="oninput" />
+            <span class="size-label">
+                @(Pizza.Size)" (£@(Pizza.GetFormattedTotalPrice()))
+            </span>
+        </div>
+        
+        <div>
+            <label>Extra Toppings:</label>
+            @if (toppings == null)
+            {
+                <select class="custom-select" disabled>
+                    <option>(loading...)</option>
+                </select>
+            }
+            else if (Pizza.Toppings.Count >= 6)
+            {
+                <div>(maximum reached)</div>
+            }
+            else
+            {
+                <select class="custom-select" @onchange="ToppingSelected">
+                    <option value="-1" disabled selected>(select)</option>
+                    @for (var i = 0; i < toppings.Count; i++)
+                    {
+                        <option value="@i">@toppings[i].Name - (£@(toppings[i].GetFormattedPrice()))</option>
+                    }
+                </select>
+            }
+        </div>
+
+        <div class="toppings">
+            @foreach (var topping in Pizza.Toppings)
+            {
+                <div class="topping">
+                    @topping.Topping.Name
+                    <span class="topping-price">@topping.Topping.GetFormattedPrice()</span>
+                    <button type="button" class="delete-topping" @onclick="@(() => RemoveTopping(topping.Topping))">x</button>
+                </div>
+            }
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary mr-auto" @onclick="ModalInstance.CancelAsync">Close</button>
+        <span class="m-auto text-center">
+            Price: <span class="price">@(Pizza.GetFormattedTotalPrice())</span>
+        </span>
+        <button type="button" class="btn btn-primary ml-auto" @onclick="Save">Save changes</button>
+    </div>
+</form>
+
+@code {
+    [Parameter] public Pizza Pizza { get; set; }
+
+    [CascadingParameter] BlazoredModalInstance ModalInstance { get; set; }
+
+    List<Topping> toppings;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var client = ClientFactory.CreateClient("public");
+        toppings = await client.GetFromJsonAsync<List<Topping>>("toppings");
+    }
+
+    void ToppingSelected(ChangeEventArgs e)
+    {
+        if (int.TryParse((string)e.Value, out var index) && index >= 0)
+        {
+            AddTopping(toppings[index]);
+        }
+    }
+
+    void AddTopping(Topping topping)
+    {
+        if (Pizza.Toppings.Find(pt => pt.Topping == topping) == null)
+        {
+            Pizza.Toppings.Add(new PizzaTopping() { Topping = topping });
+        }
+    }
+
+    void RemoveTopping(Topping topping)
+    {
+        Pizza.Toppings.RemoveAll(pt => pt.Topping == topping);
+    }
+
+    async Task Save()
+    {
+        await ModalInstance.CloseAsync(ModalResult.Ok<Pizza>(Pizza));
+    }
+
+}

@@ -1,30 +1,70 @@
 ﻿@page "/"
-@inject HttpClient HttpClient
+@*@inject HttpClient HttpClient*@
+@inject IHttpClientFactory ClientFactory
+@inject IJSRuntime JSRuntime
 
-<div class="main">
-    <ul class="pizza-cards">
-        @if (specials != null)
+<div class="row">
+
+    @if (specials != null)
+    {
+        @foreach (var special in specials)
         {
-            @foreach (var special in specials)
-            {
-                <li style="background-image: url('@special.ImageUrl')">
-                    <div class="pizza-info">
-                        <span class="title">@special.Name</span>
-                        @special.Description
-                        <span class="price">@special.GetFormattedBasePrice()</span>
-                    </div>
-                </li>
-            }
+            <div class="card col-md-3 mb-3 mx-1" @onclick="@(()=>ShowConfigurePizzaDialog(special))">
+                <img class="card-img-top" src="@special.ImageUrl" alt="Card image">
+                <div class="card-body">
+                    <h4 class="card-title">@special.Name</h4>
+                    <p class="card-text">@special.Description</p>
+                    <h6 class="card-subtitle  text-muted">
+                        @special.GetFormattedBasePrice()
+                    </h6>
+                </div>
+            </div>
         }
-    </ul>
-</div>  
+    }
+
+</div>
 
 @code
 {
     List<PizzaSpecial> specials;
+    Pizza configuringPizza;
+
+    [CascadingParameter] public IModalService Modal { get; set; }
+
+    Order order = new Order();
 
     protected override async Task OnInitializedAsync()
     {
-        specials = await HttpClient.GetFromJsonAsync<List<PizzaSpecial>>("specials");
+        var client = ClientFactory.CreateClient("public");
+        specials = await client.GetFromJsonAsync<List<PizzaSpecial>>("specials");
+    }
+
+    async Task ShowConfigurePizzaDialog(PizzaSpecial special)
+    {
+        configuringPizza = new Pizza()
+        {
+            Special = special,
+            SpecialId = special.Id,
+            Size = Pizza.DefaultSize,
+            Toppings = new List<PizzaTopping>(),
+        };
+
+        var parameters = new ModalParameters();
+        parameters.Add(nameof(Pizza), configuringPizza);
+
+        var pizzaModal = Modal.Show<ConfigurePizzaDialog>("Edit Pizza", parameters);
+        var result = await pizzaModal.Result;
+
+        if (result.Cancelled)
+        {
+            Console.WriteLine("Modal was cancelled");
+        }
+        else
+        {
+            order.Pizzas.Add((Pizza)result.Data);
+            //((Pizza)result.Data).Special.BasePrice
+            await JSRuntime.InvokeVoidAsync("console.log", order);
+
+        }
     }
 }
